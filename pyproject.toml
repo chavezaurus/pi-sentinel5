@@ -1,0 +1,32 @@
+[project]
+name = "sentinel5"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "cherrypy>=18.10.0",
+    "ephem>=4.2.1",
+    "loguru>=0.7.3",
+    "numpy>=2.4.3",
+    "pillow>=12.1.1",
+    "pyserial>=3.5",
+    "scipy>=1.17.1",
+    "v4l2-python3>=0.3.5",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
