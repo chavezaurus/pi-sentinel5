@@ -120,6 +120,10 @@ input:focus {
     align-items: center;
 }
 
+dialog .form-grid {
+    grid-template-columns: 150px 150px;
+}
+
 .form-grid label {
     text-align: right;
     font-size: 1rem;

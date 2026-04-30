@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import ctypes
 import fcntl
 import json
@@ -1971,12 +1972,11 @@ class SentinelServer:
     def get_sky_objects(self):
         logger.info("Cmd: get_sky_objects")
         response = {}
-        try:
-            with open("sky_list.json") as file:
+        path = Path("sky_list.json")
+        if path.exists():
+            with open(path) as file:
                 s = file.read()
                 response = json.loads(s)
-        except Exception:
-            traceback.print_exc()
         return response
 
     @cherrypy.expose
@@ -2169,6 +2169,18 @@ class GPS_Module:
         self.gpsLongitude = 0.0
         self.count = 0
 
+        parser = argparse.ArgumentParser(description="GPS Module arguments")
+        parser.add_argument(
+            "-p", "--port", type=str, default="/dev/ttyACM0", help="GPS Module port"
+        )
+        parser.add_argument(
+            "-b", "--baudrate", type=int, default=9600, help="GPS Module baud rate"
+        )
+
+        args = parser.parse_args()
+        self.port = args.port
+        self.baudrate = args.baudrate
+
         self.thread = Thread(target=self.gpsThread, daemon=True).start()
 
     def position(self):
@@ -2217,7 +2229,8 @@ class GPS_Module:
         # time = sdata[1][0:2] + ":" + sdata[1][2:4] + ":" + sdata[1][4:6]
         self.gpsLatitude = self.decode(sdata[3], sdata[4])  # latitude
         self.gpsLongitude = self.decode(sdata[5], sdata[6])  # longitute
-        if self.count % 1800 == 0:
+        if self.count % 60 == 0:
+            # if self.count % 1800 == 0:
             msg = (
                 f"GPS: lat={self.gpsLatitude:.4f}, lon={self.gpsLongitude:.4f}, "
                 f"timeOffset={self.gpsTimeOffset:.3f}"
@@ -2229,14 +2242,14 @@ class GPS_Module:
         # date = sdata[9][0:2] + "/" + sdata[9][2:4] + "/" + sdata[9][4:6]#date
         return True
 
-    def gpsThread(self, port="/dev/ttyACM0"):
+    def gpsThread(self):
         try:
-            with serial.Serial(port, timeout=1) as ser:
+            with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
                 while True:
                     line = ser.readline().decode("ascii", errors="replace").strip()
                     self.parseGPS(line)
         except serial.SerialException as e:
-            logger.error(f"Could not open serial port {port}: {e}")
+            logger.error(f"Could not open serial port {self.port}: {e}")
         except Exception as e:
             logger.error(f"Unexpected error in gpsThread: {e}")
 
