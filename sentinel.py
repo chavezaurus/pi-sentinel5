@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import ctypes
+import errno
 import fcntl
 import json
 import mmap
@@ -8,7 +9,7 @@ import os
 import select
 import sys
 import traceback
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, time, timedelta
 from enum import IntEnum
 from glob import glob
@@ -730,24 +731,22 @@ class DetectorState:
 
 
 def get_detector_state():
-    filepath = "state.json"
+    filepath = Path("state.json")
+    if not filepath.exists():
+        return DetectorState()
 
     # Open the file and load the JSON data
-    try:
-        with open(filepath) as file:
-            dict = json.load(file)
-            return DetectorState(
-                archivePath=dict.get("archivePath", "None"),
-                devName=dict.get("devName", "/dev/video2"),
-                eventsPerHour=dict.get("eventsPerHour", 10),
-                noiseThreshold=dict.get("noiseThreshold", 50),
-                sumThreshold=dict.get("sumThreshold", 50),
-            )
-    except FileNotFoundError:
-        return DetectorState()
-    except json.JSONDecodeError as e:
-        logger.warning(f"Error: Invalid JSON format in '{filepath}': {e}")
-        return DetectorState()
+    dict = {}
+    with filepath.open() as file:
+        dict = json.load(file)
+        dstate = DetectorState(
+            archivePath=dict.get("archivePath", "None"),
+            devName=dict.get("devName", "/dev/video2"),
+            eventsPerHour=dict.get("eventsPerHour", 10),
+            noiseThreshold=dict.get("noiseThreshold", 50),
+            sumThreshold=dict.get("sumThreshold", 50),
+        )
+    return dstate
 
 
 def dateTimeString(secs, usecs):
@@ -795,9 +794,10 @@ class Calibration:
 
 
 def get_calibration():
-    filepath = "calibration.json"
+    filepath = Path("calibration.json")
+    if not filepath.exists():
+        return Calibration()
 
-    # Open the file and load the JSON data
     try:
         with open(filepath) as file:
             dict = json.load(file)
@@ -1594,10 +1594,12 @@ class SentinelServer:
             sleep(1)
 
         last_time = time(hour=0, minute=0)
-        with open("state.json") as f:
-            s = f.read()
-            data = json.loads(s)
-            self.handle_set_state(data)
+        path = Path("state.json")
+        if path.exists():
+            with path.open() as f:
+                s = f.read()
+                data = json.loads(s)
+                self.handle_set_state(data)
 
         while cherrypy.engine.state == cherrypy.engine.states.STARTED:  # type: ignore[attr-defined]
             # Check for timed actions
@@ -1958,14 +1960,17 @@ class SentinelServer:
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     def get_calibration(self):
         logger.info("Cmd: get_calibration")
-        response = {}
+        path = Path("calibration.json")
+        if not path.exists():
+            return asdict(Calibration())
         try:
-            with open("calibration.json") as file:
+            with path.open() as file:
                 s = file.read()
                 response = json.loads(s)
+                return response
         except Exception:
             traceback.print_exc()
-        return response
+            return {}
 
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
@@ -2041,25 +2046,26 @@ class SentinelServer:
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     def get_state(self):
         logger.info("Cmd: get_state")
-        try:
-            with open("state.json") as file:
+        response = {}
+        path = Path("state.json")
+        if not path.exists():
+            response = asdict(DetectorState())
+        else:
+            with path.open() as file:
                 response = json.load(file)
                 self.handle_set_state(response)
-                response["frameRate"] = round(shared_frame_rate.value, 3)
-                response["zenithAmplitude"] = round(shared_zenith_amplitude.value, 3)
-                response["running"] = state_to_str(shared_state_code.value)
-                response["numNew"] = len(glob("new/*.mp4"))
-                response["numSaved"] = len(glob("saved/*.mp4"))
-                response["numTrashed"] = len(glob("trash/*.mp4"))
-                position = self.gpsModule.position()
+        response["frameRate"] = round(shared_frame_rate.value, 3)
+        response["zenithAmplitude"] = round(shared_zenith_amplitude.value, 3)
+        response["running"] = state_to_str(shared_state_code.value)
+        response["numNew"] = len(glob("new/*.mp4"))
+        response["numSaved"] = len(glob("saved/*.mp4"))
+        response["numTrashed"] = len(glob("trash/*.mp4"))
+        position = self.gpsModule.position()
 
-                response["gpsLatitude"] = round(position[0], 4)
-                response["gpsLongitude"] = round(position[1], 4)
-                response["gpsTimeOffset"] = round(self.gpsModule.timeOffset(), 3)
-                return response
-        except Exception:
-            traceback.print_exc()
-            return {"response": "ERROR"}
+        response["gpsLatitude"] = round(position[0], 4)
+        response["gpsLongitude"] = round(position[1], 4)
+        response["gpsTimeOffset"] = round(self.gpsModule.timeOffset(), 3)
+        return response
 
     @cherrypy.expose
     @cherrypy.tools.json_in()  # type: ignore[attr-defined]
@@ -2229,8 +2235,7 @@ class GPS_Module:
         # time = sdata[1][0:2] + ":" + sdata[1][2:4] + ":" + sdata[1][4:6]
         self.gpsLatitude = self.decode(sdata[3], sdata[4])  # latitude
         self.gpsLongitude = self.decode(sdata[5], sdata[6])  # longitute
-        if self.count % 60 == 0:
-            # if self.count % 1800 == 0:
+        if self.count % 1800 == 0:
             msg = (
                 f"GPS: lat={self.gpsLatitude:.4f}, lon={self.gpsLongitude:.4f}, "
                 f"timeOffset={self.gpsTimeOffset:.3f}"
@@ -2324,6 +2329,25 @@ if __name__ == "__main__":
     )
 
     logger.info("Program started")
+
+    # Suppress the benign OSError(EBADF) that cheroot raises during garbage
+    # collection when a client disconnects mid-request (e.g. during the
+    # long-polling /subscribe endpoint).  Python calls sys.unraisablehook
+    # for exceptions that occur inside __del__ and would otherwise be silently
+    # discarded; we intercept only the specific case we know is harmless.
+    _original_unraisablehook = sys.unraisablehook
+
+    def _suppress_socket_cleanup_errors(unraisable):
+        if (
+            isinstance(unraisable.exc_value, OSError)
+            and unraisable.exc_value.errno == errno.EBADF
+            and getattr(unraisable.object, "__qualname__", "") == "IOBase.__del__"
+        ):
+            return  # cheroot socket wrapper closed after fd already gone
+        _original_unraisablehook(unraisable)
+
+    sys.unraisablehook = _suppress_socket_cleanup_errors
+
     # testGPS()
     # Switching to production disables autoreload and other dev tools
     cherrypy.config.update({"global": {"environment": "production"}})

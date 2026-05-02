@@ -104,7 +104,6 @@ async function subscribe() {
     } else {
       // Get and show the message
       let result = await response.json();
-      console.log(result);
       if (result.msg === "changed") {
         requestControls();
       }
@@ -750,7 +749,7 @@ const actionSelector = () => {
   const toggleStartStop = async () => {
     close();
     try {
-      console.log("toggleStartStop");
+      // console.log("toggleStartStop");
       const result = await post("toggle_camera");
       if (result.response != "OK") {
         alert(`Toggle failed: ${result.response}`);
@@ -1182,10 +1181,7 @@ async function getCalibrationParameters() {
 async function getCalibrationSamples() {
   try {
     const data = await get("get_sky_objects");
-    if (data && Object.keys(data).length !== 0) {
-      // console.log(data);
-      skySamples.val = data;
-    }
+    skyObjectTable.val = data;
   } catch (error) {
     alert(error);
   }
@@ -1585,7 +1581,7 @@ function init() {
 }
 
 async function submitPlayback(e) {
-  console.log("submitPlayback", e);
+  // console.log("submitPlayback", e);
   e.preventDefault();
   playbackDialog.close();
   const fd = new FormData(e.target);
@@ -1627,7 +1623,7 @@ const playbackDialog = dialog(
 );
 
 async function submitAverage(e) {
-  console.log("submitAverage", e);
+  // console.log("submitAverage", e);
   e.preventDefault();
   averageDialog.close();
   const fd = new FormData(e.target);

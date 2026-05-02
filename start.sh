@@ -1,8 +1,5 @@
 #!/bin/bash
 
-## sync the time
-sudo ntpdate -q 0.us.pool.ntp.org;
-
 tmux start-server
 tmux new-session -d -s sentinel
 tmux send-keys -t sentinel:0 "uv run sentinel.py" ENTER
