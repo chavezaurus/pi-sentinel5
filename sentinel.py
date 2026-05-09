@@ -1352,6 +1352,78 @@ class Detector:
                 self.terminateTrigger(secs, usecs)
 
 
+def CalibrationVector(obj):
+    v = [
+        obj["V"],
+        obj["S"],
+        obj["D"],
+        radians(obj["a0"]),
+        radians(obj["E"]),
+        radians(obj["eps"]),
+        obj["COPx"],
+        obj["COPy"],
+        obj["alpha"],
+        obj["flat"],
+    ]
+    return v
+
+
+def CalibrationObject(v):
+    obj = {
+        "V": float(v[0]),
+        "S": float(v[1]),
+        "D": float(v[2]),
+        "a0": degrees(float(v[3])),
+        "E": degrees(float(v[4])),
+        "eps": degrees(float(v[5])),
+        "COPx": float(v[6]),
+        "COPy": float(v[7]),
+        "alpha": float(v[8]),
+        "flat": float(v[9]),
+    }
+    return obj
+
+
+def CalibrationTruncate(obj):
+    obj["V"] = round(obj["V"], 6)
+    obj["S"] = round(obj["S"], 6)
+    obj["D"] = round(obj["D"], 6)
+    obj["a0"] = round(obj["a0"], 3)
+    obj["E"] = round(obj["E"], 3)
+    obj["eps"] = round(obj["eps"], 3)
+    obj["COPx"] = round(obj["COPx"], 3)
+    obj["COPy"] = round(obj["COPy"], 3)
+    obj["alpha"] = round(obj["alpha"], 6)
+    obj["flat"] = round(obj["flat"], 6)
+
+
+def TotalCalibrationError(calVector, skyList):
+    obj = CalibrationObject(calVector)
+    converter = Converter(Calibration(**obj))
+
+    sum = 0.0
+    for skyThing in skyList:
+        px = skyThing["px"]
+        py = skyThing["py"]
+        azim = skyThing["azim"]
+        elev = skyThing["elev"]
+
+        azim_s, elev_s = converter.convert(px, py)
+
+        x1 = cos(radians(azim)) * cos(radians(azim))
+        y1 = sin(radians(azim)) * cos(radians(elev))
+
+        x2 = cos(radians(azim_s)) * cos(radians(azim_s))
+        y2 = sin(radians(azim_s)) * cos(radians(elev_s))
+
+        dx = x1 - x2
+        dy = y1 - y2
+
+        sum += sqrt(dx * dx + dy * dy)
+
+    return sum
+
+
 class SentinelServer:
     MAX_PERCENT_USAGE = 90.0
 
@@ -1376,48 +1448,6 @@ class SentinelServer:
 
     def __del__(self):
         logger.info("SentinelServer stopped")
-
-    def CalibrationVector(self, obj):
-        v = [
-            obj["V"],
-            obj["S"],
-            obj["D"],
-            radians(obj["a0"]),
-            radians(obj["E"]),
-            radians(obj["eps"]),
-            obj["COPx"],
-            obj["COPy"],
-            obj["alpha"],
-            obj["flat"],
-        ]
-        return v
-
-    def CalibrationObject(self, v):
-        obj = {
-            "V": v[0],
-            "S": v[1],
-            "D": v[2],
-            "a0": degrees(v[3]),
-            "E": degrees(v[4]),
-            "eps": degrees(v[5]),
-            "COPx": v[6],
-            "COPy": v[7],
-            "alpha": v[8],
-            "flat": v[9],
-        }
-        return obj
-
-    def CalibrationTruncate(self, obj):
-        obj["V"] = round(obj["V"], 6)
-        obj["S"] = round(obj["S"], 6)
-        obj["D"] = round(obj["D"], 6)
-        obj["a0"] = round(obj["a0"], 3)
-        obj["E"] = round(obj["E"], 3)
-        obj["eps"] = round(obj["eps"], 3)
-        obj["COPx"] = round(obj["COPx"], 3)
-        obj["COPy"] = round(obj["COPy"], 3)
-        obj["alpha"] = round(obj["alpha"], 6)
-        obj["flat"] = round(obj["flat"], 6)
 
     def getEvents(self, directory):
         jpgSet = set()
@@ -1480,32 +1510,6 @@ class SentinelServer:
                 mjpg_file = fromPath.with_name(f"{fromPath.stem}m.jpg")
                 if mjpg_file.exists():
                     mjpg_file.rename(toPath.with_name(f"{toPath.stem}m.jpg"))
-
-    def TotalCalibrationError(self, calVector, skyList):
-        obj = self.CalibrationObject(calVector)
-        converter = Converter(obj)
-
-        sum = 0.0
-        for skyThing in skyList:
-            px = skyThing["px"]
-            py = skyThing["py"]
-            azim = skyThing["azim"]
-            elev = skyThing["elev"]
-
-            azim_s, elev_s = converter.convert(px, py)
-
-            x1 = cos(radians(azim)) * cos(radians(azim))
-            y1 = sin(radians(azim)) * cos(radians(elev))
-
-            x2 = cos(radians(azim_s)) * cos(radians(azim_s))
-            y2 = sin(radians(azim_s)) * cos(radians(elev_s))
-
-            dx = x1 - x2
-            dy = y1 - y2
-
-            sum += sqrt(dx * dx + dy * dy)
-
-        return sum
 
     def runStopSequence(self):
         self.stop_camera_event.set()
@@ -2006,21 +2010,27 @@ class SentinelServer:
         logger.info("Cmd: do_calibration")
         data = cherrypy.request.json
         sky_object_list = data["sky_object_list"]
-        calibration_state = data["calibration_state"]
+        try:
+            with open("sky_list.json", "w") as file:
+                s = json.dumps(sky_object_list, sort_keys=True, indent=4)
+                file.write(s)
+        except Exception:
+            traceback.print_exc()
 
-        calVector = self.CalibrationVector(calibration_state)
+        calibration_state = data["calibration_state"]
+        calVector = CalibrationVector(calibration_state)
 
         result = minimize(
-            fun=self.TotalCalibrationError,
+            fun=TotalCalibrationError,
             x0=calVector,
             method="Nelder-Mead",
             args=(sky_object_list,),
             options={"maxiter": 10000, "disp": False},
         )
-        logger.info(f"Iterations: {result.nfev} Error: {result.fun}")
+        logger.info(f"Cal Iterations: {result.nfev} Error: {result.fun}")
 
-        calObject = self.CalibrationObject(result["x"])
-        self.CalibrationTruncate(calObject)
+        calObject = CalibrationObject(result["x"])
+        CalibrationTruncate(calObject)
 
         calObject["cameraLatitude"] = calibration_state["cameraLatitude"]
         calObject["cameraLongitude"] = calibration_state["cameraLongitude"]
@@ -2029,13 +2039,6 @@ class SentinelServer:
         try:
             with open("calibration.json", "w") as file:
                 s = json.dumps(calObject, sort_keys=True, indent=4)
-                file.write(s)
-        except Exception:
-            traceback.print_exc()
-
-        try:
-            with open("sky_list.json", "w") as file:
-                s = json.dumps(sky_object_list, sort_keys=True, indent=4)
                 file.write(s)
         except Exception:
             traceback.print_exc()
@@ -2060,11 +2063,11 @@ class SentinelServer:
         response["numNew"] = len(glob("new/*.mp4"))
         response["numSaved"] = len(glob("saved/*.mp4"))
         response["numTrashed"] = len(glob("trash/*.mp4"))
-        position = self.gpsModule.position()
-
-        response["gpsLatitude"] = round(position[0], 4)
-        response["gpsLongitude"] = round(position[1], 4)
-        response["gpsTimeOffset"] = round(self.gpsModule.timeOffset(), 3)
+        if self.gpsModule.working:
+            position = self.gpsModule.position()
+            response["gpsLatitude"] = round(position[0], 4)
+            response["gpsLongitude"] = round(position[1], 4)
+            response["gpsTimeOffset"] = round(self.gpsModule.timeOffset(), 3)
         return response
 
     @cherrypy.expose
@@ -2174,6 +2177,7 @@ class GPS_Module:
         self.gpsLatitude = 0.0
         self.gpsLongitude = 0.0
         self.count = 0
+        self.working = False
 
         parser = argparse.ArgumentParser(description="GPS Module arguments")
         parser.add_argument(
@@ -2214,7 +2218,7 @@ class GPS_Module:
         now = datetime.now(UTC)
         sdata = data.split(",")
         if sdata[2] == "V":
-            return False
+            return
 
         # print( "---Parsing GPRMC---", )
         hour = int(sdata[1][0:2])
@@ -2242,10 +2246,10 @@ class GPS_Module:
             )
             logger.info(msg)
         self.count += 1
+        self.working = True
         # speed = sdata[7]       #Speed in knots
         # trCourse = sdata[8]    #True course
         # date = sdata[9][0:2] + "/" + sdata[9][2:4] + "/" + sdata[9][4:6]#date
-        return True
 
     def gpsThread(self):
         try:

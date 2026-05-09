@@ -1181,7 +1181,7 @@ async function getCalibrationParameters() {
 async function getCalibrationSamples() {
   try {
     const data = await get("get_sky_objects");
-    skyObjectTable.val = data;
+    skySamples.val = data;
   } catch (error) {
     alert(error);
   }
