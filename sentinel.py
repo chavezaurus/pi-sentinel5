@@ -1431,7 +1431,6 @@ class SentinelServer:
         logger.info("init SentinelServer")
         self.startUTC = {"h": 21, "m": 30}
         self.stopUTC = {"h": 5, "m": 0}
-        self.analyze_and_compose = False
         self.stop_camera_event = Event()
         self.force_trigger_event = Event()
         self.archivePath = "None"
@@ -1511,9 +1510,6 @@ class SentinelServer:
                 if mjpg_file.exists():
                     mjpg_file.rename(toPath.with_name(f"{toPath.stem}m.jpg"))
 
-    def runStopSequence(self):
-        self.stop_camera_event.set()
-
     def handle_set_state(self, data):
         if "startUTC" in data:
             self.startUTC = data["startUTC"]
@@ -1568,31 +1564,19 @@ class SentinelServer:
         if usage > self.MAX_PERCENT_USAGE:
             lst = [d for d in os.listdir(self.archivePath) if d.startswith("s")]
             lst.sort()
-            if len(lst) >= 2:
+            if len(lst) >= 3:
                 logger.info(f"Pruning archive: {lst[0]}")
                 rmtree(os.path.join(self.archivePath, lst[0]))
-
-    def backgroundAnalyzeAndCompose(self):
-        # Only do this if we are not busy
-        if shared_state_code.value != StateCode.IDLE.value:
-            return
-
-        self.analyze_and_compose = False
-        files = Path("new").glob("*.h264")
-        for file in files:
-            csv_path = file.with_suffix(".csv")
-            jpg_path = file.with_suffix(".jpg")
-            if not csv_path.exists():
-                Thread(target=self.analyzeEvent, daemon=True, args=(file,)).start()
-                self.analyze_and_compose = True
-                return
-
-            if not jpg_path.exists():
-                Thread(target=self.composeEvent, daemon=True, args=(file,)).start()
-                self.analyze_and_compose = True
-                return
+                logger.info(f"Pruning archive: {lst[1]}")
+                rmtree(os.path.join(self.archivePath, lst[1]))
 
     def backgroundProcess(self):
+        compose_files = set()
+        analyze_files = set()
+        calibration_strings = set()
+        cal_start_time = datetime.now(UTC)
+        cal_end_time = datetime.now(UTC)
+
         # Wait for engine to start up
         while cherrypy.engine.state != cherrypy.engine.states.STARTED:  # type: ignore[attr-defined]
             sleep(1)
@@ -1617,10 +1601,32 @@ class SentinelServer:
                     if shared_state_code.value == StateCode.IDLE.value:
                         shared_state_code.value = StateCode.WATCHING.value
                         Thread(target=self.runCamera, daemon=True).start()
+                        cal_start_time = datetime.now(UTC).replace(
+                            minute=0, second=0, microsecond=0
+                        ) + timedelta(hours=2)
                 elif tstop == utc_now and tstart != tstop:
                     if shared_state_code.value == StateCode.WATCHING.value:
-                        self.runStopSequence()
-                        self.analyze_and_compose = True
+                        self.stop_camera_event.set()
+                        cal_end_time = datetime.now(UTC).replace(
+                            minute=0, second=0, microsecond=0
+                        ) - timedelta(hours=1)
+                        compose_files.clear()
+                        analyze_files.clear()
+                        calibration_strings.clear()
+
+                        for file in Path("new").glob("*.mp4"):
+                            jfile = file.with_suffix(".jpg")
+                            if not jfile.exists():
+                                compose_files.add(jfile)
+                            cfile = file.with_suffix(".csv")
+                            if not cfile.exists():
+                                analyze_files.add(cfile)
+                        if self.archivePath.lower() != "none":
+                            while cal_start_time <= cal_end_time:
+                                cal_start_time += timedelta(hours=2)
+                                calibration_strings.add(
+                                    cal_start_time.strftime("s%Y%m%d_%H%M")
+                                )
                 else:
                     self.checkExposure()
 
@@ -1630,8 +1636,22 @@ class SentinelServer:
                 if self.archivePath.lower() != "none":
                     self.pruneArchive()
 
-            if self.analyze_and_compose:
-                self.backgroundAnalyzeAndCompose()
+            if shared_state_code.value == StateCode.IDLE.value:
+                if compose_files:
+                    video_file = compose_files.pop().with_suffix(".mp4")
+                    Thread(
+                        target=self.composeEvent, daemon=True, args=(video_file,)
+                    ).start()
+                elif analyze_files:
+                    video_file = analyze_files.pop().with_suffix(".mp4")
+                    Thread(
+                        target=self.analyzeEvent, daemon=True, args=(video_file,)
+                    ).start()
+                elif calibration_strings:
+                    cal_string = calibration_strings.pop()
+                    Thread(
+                        target=self.averageEvent, daemon=True, args=(cal_string,)
+                    ).start()
 
             sleep(2)
 
