@@ -1625,7 +1625,7 @@ class SentinelServer:
                             while cal_start_time <= cal_end_time:
                                 cal_start_time += timedelta(hours=2)
                                 calibration_strings.add(
-                                    cal_start_time.strftime("s%Y%m%d_%H%M")
+                                    cal_start_time.strftime("%Y%m%d_%H%M")
                                 )
                 else:
                     self.checkExposure()
@@ -1648,9 +1648,22 @@ class SentinelServer:
                         target=self.analyzeEvent, daemon=True, args=(video_file,)
                     ).start()
                 elif calibration_strings:
-                    cal_string = calibration_strings.pop()
+                    minute_string = calibration_strings.pop()
+                    hour = minute_string[:-2]
+                    h264_path = (
+                        Path(self.archivePath) / f"s{hour}" / f"s{minute_string}.h264"
+                    )
+                    if not h264_path.exists():
+                        logger.error(f"Archive file not found: {h264_path}")
+                        continue
+
+                    text_path = h264_path.with_suffix(".txt")
+                    if not text_path.exists():
+                        logger.error(f"Archive file not found: {text_path}")
+                        continue
+
                     Thread(
-                        target=self.averageEvent, daemon=True, args=(cal_string,)
+                        target=self.averageEvent, daemon=True, args=(minute_string,)
                     ).start()
 
             sleep(2)
@@ -1733,7 +1746,7 @@ class SentinelServer:
 
         file_list = sorted(file_set)
 
-        if len(file_list) == 0:
+        if not file_list:
             return {"response": "Archive file not found"}
 
         playbackPath = Path(utcTime.strftime("new/s%Y%m%d_%H%M%S_000.h264"))
@@ -1778,7 +1791,7 @@ class SentinelServer:
                             pt.write(f"{count:4} {ftime} {fsize:7} {0:7}\n")
                             count += 1
 
-        framesPerSecond = 30
+        framesPerSecond = shared_frame_rate.value
         mp4File = playbackPath.with_suffix(".mp4")
         Popen(
             [
@@ -2163,7 +2176,18 @@ class SentinelServer:
         data = cherrypy.request.json
         utcTime = datetime.fromtimestamp(data["timestamp"] / 1000, tz=UTC)
 
+        if self.archivePath.lower() == "none":
+            return {"response": "Archive path not set"}
+
         minute_string = utcTime.strftime("%Y%m%d_%H%M")
+        hour = minute_string[:-2]
+        h264_path = Path(self.archivePath) / f"s{hour}" / f"s{minute_string}.h264"
+        if not h264_path.exists():
+            return {"response": f"Archive file not found: {h264_path}"}
+
+        text_path = h264_path.with_suffix(".txt")
+        if not text_path.exists():
+            return {"response": f"Archive file not found: {text_path}"}
 
         Thread(target=self.averageEvent, daemon=True, args=(minute_string,)).start()
         return {"response": "OK"}
