@@ -814,7 +814,7 @@ class Converter:
         self.cal = cal
 
         alpha = cal.alpha
-        flat = cal.flat
+        flat = max(cal.flat, 0.999)
         COPx = cal.COPx
         COPy = cal.COPy
 
@@ -1623,7 +1623,7 @@ class SentinelServer:
                                 analyze_files.add(cfile)
                         if self.archivePath.lower() != "none":
                             while cal_start_time <= cal_end_time:
-                                cal_start_time += timedelta(hours=2)
+                                cal_start_time += timedelta(hours=1)
                                 calibration_strings.add(
                                     cal_start_time.strftime("%Y%m%d_%H%M")
                                 )
@@ -2296,6 +2296,7 @@ class GPS_Module:
         # date = sdata[9][0:2] + "/" + sdata[9][2:4] + "/" + sdata[9][4:6]#date
 
     def gpsThread(self):
+        sleep(10)
         try:
             with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
                 while True:
