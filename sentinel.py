@@ -2296,16 +2296,19 @@ class GPS_Module:
         # date = sdata[9][0:2] + "/" + sdata[9][2:4] + "/" + sdata[9][4:6]#date
 
     def gpsThread(self):
+        error_count = 0
         sleep(10)
         try:
             with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
-                while True:
-                    line = ser.readline().decode("ascii", errors="replace").strip()
-                    self.parseGPS(line)
+                while error_count < 10:
+                    try:
+                        line = ser.readline().decode("ascii", errors="replace").strip()
+                        self.parseGPS(line)
+                    except Exception as e:
+                        logger.error(f"Unexpected error in gpsThread: {e}")
+                        error_count += 1
         except serial.SerialException as e:
             logger.error(f"Could not open serial port {self.port}: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error in gpsThread: {e}")
 
 
 conf = {
