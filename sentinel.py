@@ -814,7 +814,7 @@ class Converter:
         self.cal = cal
 
         alpha = cal.alpha
-        flat = max(cal.flat, 0.999)
+        flat = min(cal.flat, 0.999)
         COPx = cal.COPx
         COPy = cal.COPy
 
@@ -1410,16 +1410,19 @@ def TotalCalibrationError(calVector, skyList):
 
         azim_s, elev_s = converter.convert(px, py)
 
-        x1 = cos(radians(azim)) * cos(radians(azim))
+        x1 = cos(radians(azim)) * cos(radians(elev))
         y1 = sin(radians(azim)) * cos(radians(elev))
+        z1 = sin(radians(elev))
 
-        x2 = cos(radians(azim_s)) * cos(radians(azim_s))
+        x2 = cos(radians(azim_s)) * cos(radians(elev_s))
         y2 = sin(radians(azim_s)) * cos(radians(elev_s))
+        z2 = sin(radians(elev_s))
 
         dx = x1 - x2
         dy = y1 - y2
+        dz = z1 - z2
 
-        sum += sqrt(dx * dx + dy * dy)
+        sum += sqrt(dx * dx + dy * dy + dz * dz)
 
     return sum
 

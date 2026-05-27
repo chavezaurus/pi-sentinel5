@@ -146,33 +146,25 @@ const affineState = van.derive(() => {
   const COPx = calParams.COPx;
   const COPy = calParams.COPy;
   const alpha = calParams.alpha;
-  const dilation = Math.sqrt(1 - flat);
-  const K = COPx * Math.sin(alpha) + COPy * Math.cos(alpha);
-  const L = COPy * Math.sin(alpha) - COPx * Math.cos(alpha);
+  const dilation = Math.sqrt(1 - Math.min(flat, 0.999));
+  const sin_alpha = Math.sin(alpha);
+  const cos_alpha = Math.cos(alpha);
+  const K = COPx * sin_alpha + COPy * cos_alpha;
+  const L = COPy * sin_alpha - COPx * cos_alpha;
   const c =
-    Math.cos(alpha) * Math.cos(alpha) * dilation +
-    (Math.sin(alpha) * Math.sin(alpha)) / dilation;
+    cos_alpha * cos_alpha * dilation + (sin_alpha * sin_alpha) / dilation;
   const d =
-    Math.sin(alpha) * Math.cos(alpha) * dilation -
-    (Math.sin(alpha) * Math.cos(alpha)) / dilation;
+    sin_alpha * cos_alpha * dilation - (sin_alpha * cos_alpha) / dilation;
   const e =
-    -(
-      K * Math.cos(alpha) * dilation * dilation -
-      COPy * dilation +
-      L * Math.sin(alpha)
-    ) / dilation;
+    -(K * cos_alpha * dilation * dilation - COPy * dilation + L * sin_alpha) /
+    dilation;
   const f =
-    Math.sin(alpha) * Math.cos(alpha) * dilation -
-    (Math.sin(alpha) * Math.cos(alpha)) / dilation;
+    sin_alpha * cos_alpha * dilation - (sin_alpha * cos_alpha) / dilation;
   const g =
-    Math.sin(alpha) * Math.sin(alpha) * dilation +
-    (Math.cos(alpha) * Math.cos(alpha)) / dilation;
+    sin_alpha * sin_alpha * dilation + (cos_alpha * cos_alpha) / dilation;
   const h =
-    -(
-      K * Math.sin(alpha) * dilation * dilation -
-      COPx * dilation -
-      L * Math.cos(alpha)
-    ) / dilation;
+    -(K * sin_alpha * dilation * dilation - COPx * dilation - L * cos_alpha) /
+    dilation;
 
   af.c = c;
   af.d = d;
@@ -1346,6 +1338,7 @@ async function handleImageClick(e) {
       nearest.py = origY;
       nearest.id = eventId.rawVal.id;
       skySamples.val = skySamples.rawVal.concat([nearest]);
+      saveSkySamples();
     }
   }
 }
@@ -1437,6 +1430,19 @@ async function calibrate() {
 
     calibrationParameters.val = result.calibration_state;
     populateForm2(calibrationParameters.rawVal);
+  } catch (error) {
+    alert(error);
+  }
+}
+
+async function saveSkySamples() {
+  const body = { sky_object_list: skySamples.rawVal };
+  try {
+    const result = await post("save_sky_objects", body);
+    if (result.response != "OK") {
+      alert(result.response);
+      return;
+    }
   } catch (error) {
     alert(error);
   }
