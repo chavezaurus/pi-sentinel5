@@ -70,7 +70,7 @@ The interface consists of an image/video panel on the right and a control panel 
 
 Press the **Events** button to select the **Events Pane** as shown below.
 
-<img src="images/image1.png" alt="Events Pane" style="zoom:50%;" />
+<img src="images/image1.png" alt="Events Pane" />
 
 The **Events Pane** contains three selection radio buttons (**New, Saved, Trash**), used to select one of three directories (`new`, `saved`, `trash`) containing event files.  When events occur, they are automatically placed in the `new` directory.  The left column shows a list of time strings associated with each event. The time string indicates the UTC time that the event occurred.  To view the event, click on the time string.  If a composite image is available, it will be shown first.  Clicking the time string again will then show the video of the event.  If you continue to click the time string, you will toggle between showing the composite image and the video.  If a composite image is not available, only the video of the event will be displayed.
 
@@ -82,7 +82,7 @@ Similarly, if you select the **Saved** button, you will see a table containing a
 
 Press the **Controls** button to select the **Controls Pane** as shown below.  This pane contains status information and various settings used to control the operation of the Pi Sentinel software.
 
-<img src="images/image2.png" alt="Control Pane" style="zoom:50%;" />
+<img src="images/image2.png" alt="Control Pane" />
 
 * **Running** - This shows the running state of the Pi Sentinel software.  It can be one of the following
   * **Idle** - The software is not watching for meteors or running other processing tasks.
@@ -112,7 +112,7 @@ Next is the **Submit** button.  If you change one of the parameters above, you m
 
 At the top of the left panel, you will also see the **Cmds** pull-down menu button.  If you press the **Cmds** button, you will see drop-down commands, as shown below:
 
-<img src="images/image3.png" alt="Cmds" style="zoom:50%;" />
+<img src="images/image3.png" alt="Cmds"  />
 
 * **Toggle Start/Stop** - This command toggles the running state of Pi Sentinel between **Idle** and **Watching**.  That is, if the running state is **Idle**, this command will cause Pi Sentinel to start watching for meteors.  If the running state is **Watching**, this command will cause Pi Sentinel to stop watching and return to the **Idle** state.
 
@@ -135,13 +135,13 @@ At the top of the left panel, you will also see the **Cmds** pull-down menu butt
 
 * **Stargaze** - This command produces a image of the sky using video data from the archive, which is processed and enhanced to reveal faint stars and planets that are not normally visible.   A dialog is opened, as shown below, allowing the user to select a date and time.  A one minute file of archive data from the selected time is then used to create the star/planet image.  The process works as follows:  All frames from the first half minute of video are summed and then an equal number of frames from the second half minute are subtracted.  The result is then scaled.   In theory, all static features and noise accumulated during the first half are cancelled out by subtracting the frames from the second half.  However, the light from stars accumulated during the first half will not be cancelled out when the frames from the second half are subtracted because the stars will have moved slightly during that time. The resulting image is placed in the **Calibration** directory.
 
-  <img src="images/image4.png" alt="Stargaze" style="zoom:50%;" />
+  <img src="images/image4.png" alt="Stargaze"  />
 
   An alert will appear when the action has completed.  This command works only when Pi Sentinel starts out in the **Idle** state.
 
 * **Playback** - This command lets the user generate events using data from the archive.  A dialog appears as shown below:
 
-  <img src="images/image5.png" alt="Event Playback" style="zoom:50%;" />
+  <img src="images/image5.png" alt="Event Playback"  />
 
   The user can select a date, time and duration of the event.  If video data from the selected time and duration are in the archive, an event is generated as if a genuine meteor event was detected at that time.  This can be useful if Pi Sentinel did not see a meteor at a certain time but we have indications from other sources that a meteor occurred.  Perhaps the threshold was not set correctly or the maximum number of events per hour limit was already exceeded.  For convenience, the Date and Time are initialized to the time of the last event selected.  
 * **Get Video** - This command  fetches the most recently viewed video to local storage.  On my Mac I use this to bring the video file from the Raspberry Pi to the Mac.
@@ -152,7 +152,7 @@ At the top of the left panel, you will also see the **Cmds** pull-down menu butt
 
 * **Recalc Times** - This command will calculate the Auto Start Time and the Auto Stop Time based on the current times of sunrise and sunset at the camera's current location.  A dialog appears as shown below which allows you to specify the minutes of twilight.  The Auto Start Time is then set to the specified number of minutes of twilight after sunset, and the Auto Stop Time is set to the specified number of minutes of twilight before sunrise. This command can be invoked periodically throughout the year to accommodate the changing amount of darkness as the seasons change.
 
-<img src="images/image6.png" alt="Twilight Dialog" style="zoom:50%;" />
+<img src="images/image6.png" alt="Twilight Dialog"  />
 
 * **Empty Trash** - This command deletes all files in the **Trash** directory.
 
@@ -160,7 +160,7 @@ At the top of the left panel, you will also see the **Cmds** pull-down menu butt
 
 Press the **Cal** button to select the **Cal Pane**.  This pane actually combines three panes associated with Calibration.  These panes are selected with the selector button at the top left with the following options: **Params**, **Images**, and **Samples**.  When **Params** is selected, the following pane is shown:
 
-<img src="images/image7.png" alt="Calibrate Parameters" style="zoom:50%;" />
+<img src="images/image7.png" alt="Calibrate Parameters" />
 
 The **Params** pane presents all the parameters of the Borovicka calibration equation that are used to calibrate the view, that is, to map each point in the image view to a true Azimuth and Elevation, taking into account the positioning of the camera and the distortion of the lens.  We derive these parameters by matching acquired images of stars and planets with their known positions in the sky from the point of view of the camera at the time the images were taken.  To verify that the calibration is correct, we can overlay markers or the calculated position of stars and planets (using the Borovicka parameters) onto the corresponding sky image. This allows us to compare the calculated positions with the actual positions.  As a convenience, we also overlay the calculated positions of the cardinal directions (North, South, East, and West) and the Zenith direction.  The overlay is enabled by clicking the **Show Stars** checkbox at the bottom of the view area.  The star positions are shown as red circles and the directions are shown as red dots.
 
@@ -174,11 +174,11 @@ Calibration involves selecting the image of a star or planet and identifying whi
 
 Now select the **Images** pane, which should look like the following:
 
-<img src="images/image8.png" alt="" style="zoom:50%;" />
+<img src="images/image8.png" alt=""  />
 
 Here we see a list of all Stargazer images that have been produced from archive data. These are images that were either created using the **Stargaze** command or were created automatically nightly by the Pi Sentinel software. The list item indicates the date and time of the image.  If the sky was clear when the data were taken, some of these images may contain points of light that can be identified as stars or planets. Clicking on a list item will show the image in the viewing area. If you turn on the **Show Stars** checkbox, you will see circles where the software expects the stars or planet to be, based on the parameters in the Borovicka calibration equation. When calibration is successful, the stars and planets will coincide with their expected locations. This is shown in the partial image below.
 
-<img src="images/image10.png" alt="" style="zoom:50%;" />
+<img src="images/image10.png" alt="" />
 
 Of course, not all stars and planets will produce a recognizable image.  This depends on the brightness of the star or planet, and on how clear the sky is at the time the data were collected. 
 
@@ -186,11 +186,11 @@ When first starting out, the star and planet images will not be in their corresp
 
 The next step is to create a list that matches star/planet locations in the image with their true locations in the sky.  For example, if you have an image that has a bright spot that you are pretty confident is Jupiter, and you have adjusted the Borovicka parameters so that the red circle labeled Jupiter is near the bright spot, then carefully click the bright spot.  You will get a dialog like the following:
 
-<img src="images/image11.png" alt="" style="zoom:50%;" />
+<img src="images/image11.png" alt=""  />
 
 The program lets you verify that you are identifying the bright spot as Jupiter. Continue this with other bright spots on other images to get a full list. The more the better. To see the list, select the **Samples** option. This looks like this;
 
-<img src="images/image9.png" alt="" style="zoom:50%;" />
+<img src="images/image9.png" alt=""  />
 
 If one of the list elements was created in error, you can click on the list element to remove it.
 
