@@ -78,6 +78,14 @@ The second column in the table lets you specify into which directory you would l
 
 Similarly, if you select the **Saved** button, you will see a table containing all the events that are in the `saved` directory.  These events can be examined and moved just like events in the `new` directory.  You can also examine and move events in the `trash` directory by selecting the **Trash** button.
 
+You can also use the keyboard arrow keys to navigate the event table once a row has been selected:
+
+* **Up/Down Arrow** - Moves the selection to the previous/next row in the table and shows that event, just as if you had clicked on its time string.
+* **Right Arrow** - Cycles the selected row's destination cell through `new`, `trash`, and `saved`, the same as clicking that cell.
+* **Left Arrow** - Toggles the display of the selected event between the composite image and the video, the same as clicking the time string of the already-selected row.
+
+These shortcuts are only active while the **Events Pane** table is visible and focus is not in a text field or open dialog.
+
 ### Control Pane
 
 Press the **Controls** button to select the **Controls Pane** as shown below.  This pane contains status information and various settings used to control the operation of the Pi Sentinel software.
