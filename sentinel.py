@@ -1804,7 +1804,7 @@ class SentinelServer:
         shared_state_code.value = StateCode.IDLE
 
     def retestThread(self, file_list):
-        shared_state_code.value = StateCode.RESTESTING
+        shared_state_code.value = StateCode.RETESTING
         source = RetestSource(self.shm, file_list)
         detector = Detector(self.shm, self.force_trigger_event)
         p = Process(target=decoderProcess, args=(self.shm, source, detector))
