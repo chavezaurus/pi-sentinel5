@@ -830,6 +830,11 @@ const actionSelector = () => {
     averageDialog.showModal();
   };
 
+  const retest = () => {
+    close();
+    retestDialog.showModal();
+  };
+
   const downloadJpg = () => {
     close();
     if (!goodImage) return;
@@ -922,6 +927,7 @@ const actionSelector = () => {
       button({ onclick: analyze }, "Analyze"),
       button({ onclick: average }, "Stargaze"),
       button({ onclick: playback }, "Playback"),
+      // button({ onclick: retest }, "Retest Archive Data"),
       button({ onclick: downloadJpg }, "Get Image"),
       button({ onclick: downloadMp4 }, "Get Video"),
       button({ onclick: downloadCsv }, "Get CSV"),
@@ -1628,6 +1634,48 @@ const playbackDialog = dialog(
   ),
 );
 
+async function submitRetest(e) {
+  // console.log("submitRetest", e);
+  e.preventDefault();
+  playbackDialog.close();
+  const fd = new FormData(e.target);
+  const obj = Object.fromEntries(fd.entries());
+
+  const date = new Date(obj.date + "T" + obj.time + ":00");
+  obj.timestamp = date.getTime();
+
+  obj.duration = +obj.duration;
+
+  try {
+    const result = await post("retest", obj);
+    if (result.response != "OK") {
+      alert(result.response);
+    }
+  } catch (error) {
+    alert(error);
+  }
+}
+
+const retestDialog = dialog(
+  h2("Retest Archive Data"),
+  form(
+    { method: "dialog", class: "form-grid", onsubmit: submitRetest },
+    label({ for: "date" }, "Date: "),
+    input({ type: "date", name: "date", value: formattedDate }),
+    label({ for: "time" }, "Time: "),
+    input({
+      type: "time",
+      step: 1,
+      name: "time",
+      value: formattedHourMinute,
+    }),
+    label({ for: "duration" }, "Duration (min): "),
+    input({ name: "duration", type: "number", value: 5 }),
+    button({ type: "submit" }, "Submit"),
+    button({ type: "button", onclick: () => retestDialog.close() }, "Cancel"),
+  ),
+);
+
 async function submitAverage(e) {
   // console.log("submitAverage", e);
   e.preventDefault();
@@ -1757,9 +1805,66 @@ function promptDialog(message, defaultValue = "") {
   });
 }
 
+document.addEventListener("keydown", (e) => {
+  // Only handle arrow keys when the event table is visible
+  if (eventTable.style.display === "none") return;
+  if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key))
+    return;
+
+  // Don't intercept when focus is inside an input, textarea, or an open dialog
+  const active = document.activeElement;
+  if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA"))
+    return;
+  if (active && active.closest("dialog[open]")) return;
+
+  const tableBody = eventTable.querySelector("tbody");
+  if (!tableBody) return;
+  const allRows = Array.from(tableBody.querySelectorAll("tr"));
+  if (allRows.length === 0) return;
+
+  const selectedRow = tableBody.querySelector("tr.selected");
+
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    let targetRow;
+    if (!selectedRow) {
+      targetRow =
+        e.key === "ArrowDown" ? allRows[allRows.length - 1] : allRows[0];
+    } else {
+      const currentIndex = allRows.indexOf(selectedRow);
+      targetRow =
+        e.key === "ArrowDown"
+          ? allRows[Math.min(currentIndex + 1, allRows.length - 1)]
+          : allRows[Math.max(currentIndex - 1, 0)];
+    }
+    allRows.forEach((r) => r.classList.remove("selected"));
+    targetRow.classList.add("selected");
+    targetRow.scrollIntoView({ block: "nearest" });
+    const eventObj = eventArray.rawVal[targetRow.rowIndex - 1];
+    goodVideo = eventObj.m;
+    goodImage = eventObj.j;
+    eventId.val = { dir: tableSelection, id: eventObj.event };
+  } else if (e.key === "ArrowRight" && selectedRow) {
+    e.preventDefault();
+    const cell = selectedRow.cells[1];
+    const fsm = { new: "trash", trash: "saved", saved: "new" };
+    const next = fsm[cell.textContent];
+    cell.textContent = next;
+    cell.className = next;
+    eventArray.rawVal[selectedRow.rowIndex - 1].to = next;
+  } else if (e.key === "ArrowLeft" && selectedRow) {
+    e.preventDefault();
+    const eventObj = eventArray.rawVal[selectedRow.rowIndex - 1];
+    goodVideo = eventObj.m;
+    goodImage = eventObj.j;
+    eventId.val = { dir: tableSelection, id: eventObj.event };
+  }
+});
+
 van.add(document.body, container);
 van.add(document.body, playbackDialog);
 van.add(document.body, averageDialog);
+van.add(document.body, retestDialog);
 van.add(document.body, confirmDlg);
 van.add(document.body, promptDlg);
 

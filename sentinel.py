@@ -57,6 +57,7 @@ class StateCode(IntEnum):
     ANALYZING = 3
     COMPOSING = 4
     STARGAZING = 5
+    RETESTING = 6
 
 
 @dataclass
@@ -79,6 +80,7 @@ def state_to_str(code: StateCode) -> str:
         StateCode.ANALYZING: "Analyzing",
         StateCode.COMPOSING: "Composing",
         StateCode.STARGAZING: "Stargazing",
+        StateCode.RETESTING: "Restesting",
     }[code]
 
 
@@ -672,6 +674,81 @@ class ArchiveSource:
         return self.frame_data
 
 
+class RetestSource:
+    def __init__(self, shm_buf, file_list):
+        self.shm_buf = shm_buf
+        self.file_list = file_list
+        self.video_file = None
+        self.text_file = None
+        self.line = None
+        self.offset = 0
+
+    def get(self):
+        line = self.next_line()
+        if not line:
+            return None
+
+        items = line.split()
+        if len(items) != 2:
+            return None
+
+        ftime = items[0]
+        fsize = int(items[1])
+
+        if self.offset + fsize >= STORAGE_SIZE:
+            self.offset = 0
+
+        if not self.video_file:
+            return None
+        data = self.video_file.read(fsize)
+        if not data:
+            return None
+
+        is_idr = contains_idr(data, fsize)
+
+        self.shm_buf[self.offset : self.offset + fsize] = data
+
+        secs, usecs = dateTimeToMonotonic(ftime)
+
+        self.frame_data = FrameData(
+            offset=self.offset,
+            size=fsize,
+            is_idr=is_idr,
+            sequence=1,
+            time_string=ftime,
+            secs=secs,
+            usecs=usecs,
+        )
+
+        self.offset += fsize
+
+    def next_line(self):
+        if not self.file_list:
+            return None
+
+        if not self.text_file or not self.video_file:
+            file_path = self.file_list.pop(0)
+            self.video_file = file_path.with_suffix(".h264").open("rb")
+            self.text_file = file_path.with_suffix(".txt").open("r")
+            return self.next_line()
+
+        line = self.text_file.readline()
+        if not line:
+            self.video_file.close()
+            self.video_file = None
+            self.text_file.close()
+            self.text_file = None
+            return self.next_line()
+
+        return line
+
+    def __del__(self):
+        if self.video_file is not None:
+            self.video_file.close()
+        if self.text_file is not None:
+            self.text_file.close()
+
+
 def raw_mask():
     try:
         img = Image.open("mask.jpg").convert("RGB")
@@ -757,6 +834,25 @@ def dateTimeString(secs, usecs):
         secs + usecs / 1_000_000 + monotonic_to_realtime
     ).astimezone(UTC)
     return dt.strftime("%Y%m%d_%H%M%S_%f")[:-3]
+
+
+def dateTimeToMonotonic(s):
+    """Inverse of dateTimeString: parse a UTC datetime string (YYYYMMDD_HHMMSS_mmm)
+    and return the approximate monotonic (secs, usecs) it was generated from.
+
+    Because the monotonic-to-realtime offset is re-sampled at call time, the
+    result matches the original monotonic clock to within normal system clock
+    drift (typically a few microseconds).
+    """
+    monotonic_to_realtime = clock_gettime(CLOCK_REALTIME) - clock_gettime(
+        CLOCK_MONOTONIC
+    )
+    dt = datetime.strptime(s, "%Y%m%d_%H%M%S_%f").replace(tzinfo=UTC)
+    real_timestamp = dt.timestamp()
+    monotonic_timestamp = real_timestamp - monotonic_to_realtime
+    secs = int(monotonic_timestamp)
+    usecs = round((monotonic_timestamp - secs) * 1_000_000)
+    return secs, usecs
 
 
 def yuv_to_rgb(yuv):
@@ -1707,6 +1803,15 @@ class SentinelServer:
             p.join()
         shared_state_code.value = StateCode.IDLE
 
+    def retestThread(self, file_list):
+        shared_state_code.value = StateCode.RESTESTING
+        source = RetestSource(self.shm, file_list)
+        detector = Detector(self.shm, self.force_trigger_event)
+        p = Process(target=decoderProcess, args=(self.shm, source, detector))
+        p.start()
+        p.join()
+        shared_state_code.value = StateCode.IDLE
+
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     def subscribe(self):
@@ -1781,8 +1886,7 @@ class SentinelServer:
             count = 0
             for obj in playback_list:
                 vpath = obj["path"].with_suffix(".h264")
-                tpath = vpath.with_suffix(".txt")
-                with vpath.open("rb") as fv, tpath.open("r") as ft:
+                with vpath.open("rb") as fv:
                     if obj["offset"] != 0:
                         fv.seek(obj["offset"], 0)
                     for frame in obj["frames"]:
@@ -1811,6 +1915,40 @@ class SentinelServer:
                 mp4File,
             ]
         )
+        return {"response": "OK"}
+
+    @cherrypy.expose
+    @cherrypy.tools.json_in()  # type: ignore[attr-defined]
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
+    def retest(self):
+        detector_state = get_detector_state()
+        if detector_state.archivePath.lower() == "none":
+            return {"response": "No archive path"}
+
+        data = cherrypy.request.json
+        utcTime = datetime.fromtimestamp(data["timestamp"] / 1000, tz=UTC)
+
+        tm = utcTime
+        tp = utcTime + timedelta(minutes=data["duration"])
+
+        file_set = set()
+
+        while tm < tp + timedelta(seconds=60):
+            path0 = (
+                Path(detector_state.archivePath)
+                / tm.strftime("s%Y%m%d_%H")
+                / tm.strftime("s%Y%m%d_%H%M.txt")
+            )
+            if path0.exists():
+                file_set.add(path0)
+            tm = tm + timedelta(seconds=60)
+
+        file_list = sorted(file_set)
+
+        if not file_list:
+            return {"response": "Archive file not found"}
+
+        Thread(target=self.retestThread, daemon=True, args=(file_list,)).start()
         return {"response": "OK"}
 
     @cherrypy.expose
