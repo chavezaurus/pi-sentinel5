@@ -1839,7 +1839,17 @@ document.addEventListener("keydown", (e) => {
     }
     allRows.forEach((r) => r.classList.remove("selected"));
     targetRow.classList.add("selected");
-    targetRow.scrollIntoView({ block: "nearest" });
+    const container = eventTable;
+    const headerHeight = container.querySelector("thead").offsetHeight;
+    const containerRect = container.getBoundingClientRect();
+    const rowRect = targetRow.getBoundingClientRect();
+    const rowTop = rowRect.top - containerRect.top;
+    const rowBottom = rowRect.bottom - containerRect.top;
+    if (rowTop < headerHeight) {
+      container.scrollTop += rowTop - headerHeight;
+    } else if (rowBottom > container.clientHeight) {
+      container.scrollTop += rowBottom - container.clientHeight;
+    }
     const eventObj = eventArray.rawVal[targetRow.rowIndex - 1];
     goodVideo = eventObj.m;
     goodImage = eventObj.j;
