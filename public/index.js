@@ -213,6 +213,15 @@ const mp4Path = van.derive(() => {
   return dir + "/" + base + ".mp4";
 });
 
+const csvPath = van.derive(() => {
+  const eid = eventId.val;
+  const base = eid.id;
+  const dir = eid.dir;
+  if (base == "") return "#";
+
+  return dir + "/" + base + ".csv";
+});
+
 const starClasses = van.derive(() => {
   return showStars.val
     ? "responsive starImage"
@@ -852,7 +861,7 @@ const actionSelector = () => {
     if (!goodImage) return;
 
     const link = a();
-    link.href = mp4Path.rawVal;
+    link.href = csvPath.rawVal;
     link.download = eventId.rawVal.id + ".csv";
     van.add(document.body, link);
     link.click();
